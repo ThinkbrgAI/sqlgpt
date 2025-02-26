@@ -312,6 +312,8 @@ class MainWindow(QMainWindow):
         self.stop_btn.clicked.connect(self.stop_processing)
         self.clear_btn.clicked.connect(self.clear_responses)
         self.table.cellClicked.connect(self.update_content_viewer)
+        self.table.currentCellChanged.connect(lambda current_row, current_column, previous_row, previous_column: 
+            self.update_content_viewer(current_row, current_column))
 
     def show_config_dialog(self):
         dialog = ConfigDialog(self)
@@ -662,7 +664,7 @@ class MainWindow(QMainWindow):
         item = self.table.item(row, column)
         if item:
             self.content_viewer.setText(item.text())
-            # Select the text in the viewer but don't scroll
+            # Move cursor to start without selecting
             cursor = self.content_viewer.textCursor()
-            cursor.select(cursor.SelectionType.Document)
+            cursor.movePosition(cursor.MoveOperation.Start)
             self.content_viewer.setTextCursor(cursor) 
