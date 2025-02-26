@@ -69,3 +69,8 @@ pip show PyQt6
 - The program requires internet connection for API access
 - API keys must be configured in the application settings
 - Default model is set to "o1" with "high" reasoning effort 
+
+
+
+
+python run.py

@@ -49,6 +49,9 @@ A high-performance asynchronous system for processing large datasets through GPT
   - [x] Excel import/export
   - [x] Null-value preservation logic
   - [x] Auto-save functionality
+  - [x] Create new blank database with custom name
+  - [x] Enhanced database connection management for Windows
+  - [x] Improved file operations with error handling
 - [x] Asynchronous Processing
   - [x] 100 simultaneous API calls
   - [x] Rate limit management
@@ -133,6 +136,30 @@ message = client.messages.create(
 )
 print(message.content)
 ```
+
+## LlamaParse Integration
+- [x] Add LlamaParse configuration options
+  - Parse mode (balanced, fast, premium)
+  - Continuous mode
+  - Auto mode
+  - Max pages
+  - Language
+  - Advanced options (OCR, diagonal text, columns, tables, layout)
+- [x] Create LlamaParse API client
+  - Async file upload
+  - Job status polling
+  - Result retrieval in Markdown format
+  - Error handling and retries
+- [x] Add PDF import functionality to main window
+  - File selection dialog
+  - Progress tracking
+  - Display results in table
+  - Show metadata
+- [x] Optimize PDF processing
+  - [x] Extract only required pages when max_pages is set
+  - [x] Use temporary files for extracted pages
+  - [x] Add retry logic for network issues
+  - [x] Improve error handling and user feedback
 
 ## Development Phases
 

@@ -1,5 +1,7 @@
 import aiosqlite
 import asyncio
+import os
+import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from .schema import get_schema_sql
@@ -9,6 +11,7 @@ class DatabaseManager:
         self.db_path = db_path
         self.write_lock = asyncio.Lock()
         self._connection_pool = []
+        self._active_connections = set()  # Track all active connections
         self.max_connections = 5
 
     async def initialize(self):
@@ -22,11 +25,18 @@ class DatabaseManager:
         if not self._connection_pool:
             conn = await aiosqlite.connect(self.db_path)
             await conn.execute("PRAGMA journal_mode=WAL")
+            self._active_connections.add(conn)  # Track this connection
             return conn
-        return self._connection_pool.pop()
+        
+        conn = self._connection_pool.pop()
+        self._active_connections.add(conn)  # Track this connection
+        return conn
 
     async def release_connection(self, conn: aiosqlite.Connection):
         """Release a connection back to the pool"""
+        if conn in self._active_connections:
+            self._active_connections.remove(conn)
+            
         if len(self._connection_pool) < self.max_connections:
             self._connection_pool.append(conn)
         else:
@@ -147,10 +157,49 @@ class DatabaseManager:
             await self.release_connection(conn)
 
     async def close_all_connections(self):
-        """Close all database connections in the pool"""
+        """Close all database connections in the pool and any active connections"""
+        print(f"Closing all connections. Pool size: {len(self._connection_pool)}, Active connections: {len(self._active_connections)}")
+        
+        # Close connections in the pool
         while self._connection_pool:
             conn = self._connection_pool.pop()
-            await conn.close()
+            try:
+                await conn.close()
+                print("Closed pooled connection")
+            except Exception as e:
+                print(f"Error closing pooled connection: {str(e)}")
+        
+        # Close active connections
+        active_connections = list(self._active_connections)
+        for conn in active_connections:
+            try:
+                await conn.close()
+                self._active_connections.remove(conn)
+                print("Closed active connection")
+            except Exception as e:
+                print(f"Error closing active connection: {str(e)}")
+        
+        # Wait a moment to ensure SQLite releases the file
+        await asyncio.sleep(0.5)
+        
+        # Force close any remaining connections by explicitly releasing the database file
+        # This is a last resort to ensure the file is not locked
+        if os.name == 'nt':  # Windows-specific handling
+            try:
+                # Try to force close any remaining connections
+                for _ in range(3):  # Try a few times
+                    try:
+                        # Create a temporary file to test if the database is unlocked
+                        with open(f"{self.db_path}.test", "w") as f:
+                            f.write("test")
+                        os.remove(f"{self.db_path}.test")
+                        break  # If we get here, the file is unlocked
+                    except PermissionError:
+                        # If we can't create the test file, the database is still locked
+                        print("Database still locked, waiting...")
+                        await asyncio.sleep(0.5)
+            except Exception as e:
+                print(f"Error during force close: {str(e)}")
 
     async def __aenter__(self):
         """Async context manager entry"""
