@@ -15,6 +15,8 @@ QPushButton {
     border-radius: 4px;
     color: #ffffff;
     padding: 5px 15px;
+    min-width: 100px;
+    min-height: 25px;
 }
 
 QPushButton:hover {
@@ -23,6 +25,32 @@ QPushButton:hover {
 
 QPushButton:pressed {
     background-color: #555555;
+}
+
+QPushButton#process_btn {
+    background-color: #2e7d32;  /* Dark green */
+    border-color: #1b5e20;
+}
+
+QPushButton#process_btn:hover {
+    background-color: #388e3c;  /* Slightly lighter green */
+}
+
+QPushButton#process_btn:pressed {
+    background-color: #1b5e20;  /* Darker green */
+}
+
+QPushButton#stop_btn {
+    background-color: #c62828;  /* Dark red */
+    border-color: #b71c1c;
+}
+
+QPushButton#stop_btn:hover {
+    background-color: #d32f2f;  /* Slightly lighter red */
+}
+
+QPushButton#stop_btn:pressed {
+    background-color: #b71c1c;  /* Darker red */
 }
 
 QLineEdit, QTextEdit, QSpinBox, QComboBox {

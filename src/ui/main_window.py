@@ -9,7 +9,8 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QTableWidget, QTableWidgetItem, 
-    QProgressBar, QLabel, QFileDialog, QMessageBox
+    QProgressBar, QLabel, QFileDialog, QMessageBox, QHeaderView,
+    QTextEdit, QSplitter
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 import pandas as pd
@@ -88,10 +89,13 @@ class ProcessingThread(QThread):
     async def process_document(self, job, client):
         """Process a single document"""
         try:
+            print(f"Processing document for row {job['row_index']}...")  # Debug logging
             response, token_count = await client.process_document(job["source_doc"])
             await self.db_manager.update_response(job["id"], response, token_count)
+            print(f"Emitting update_response signal for row {job['row_index']}...")  # Debug logging
             self.update_response.emit(job["row_index"], response)
             self.rate_limiter.add_request(token_count)
+            print(f"Completed processing for row {job['row_index']}")  # Debug logging
             return True
         except Exception as e:
             self.error.emit(f"Error processing job {job['id']}: {str(e)}")
@@ -185,64 +189,98 @@ class MainWindow(QMainWindow):
 
     def setup_ui(self):
         # Main widget and layout
-        main_widget = QWidget()
-        self.setCentralWidget(main_widget)
-        layout = QVBoxLayout(main_widget)
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        layout = QVBoxLayout(central_widget)
 
-        # Toolbar
+        # Create toolbar
         toolbar = QHBoxLayout()
-        self.config_btn = QPushButton("Configure")
-        self.import_excel_btn = QPushButton("Import Excel")
+        toolbar.setSpacing(6)  # Set spacing between buttons
+        toolbar.setContentsMargins(6, 6, 6, 6)  # Set margins around buttons
+        
+        # Add buttons
         self.import_folder_btn = QPushButton("Import Folder")
-        self.export_btn = QPushButton("Export Excel")
+        self.import_excel_btn = QPushButton("Import Excel")
+        self.export_excel_btn = QPushButton("Export Excel")
+        self.config_btn = QPushButton("Configure")
         self.process_btn = QPushButton("Process Batch")
-        self.stop_btn = QPushButton("Stop Processing")
-        self.save_db_btn = QPushButton("Save Database")
-        self.load_db_btn = QPushButton("Load Database")
-        self.clear_responses_btn = QPushButton("Clear Responses")
+        self.stop_btn = QPushButton("Stop")
+        self.clear_btn = QPushButton("Clear Responses")
         
-        # Initially disable stop button
-        self.stop_btn.setEnabled(False)
+        # Set object names for styling
+        self.process_btn.setObjectName("process_btn")
+        self.stop_btn.setObjectName("stop_btn")
         
-        toolbar.addWidget(self.config_btn)
-        toolbar.addWidget(self.import_excel_btn)
-        toolbar.addWidget(self.import_folder_btn)
-        toolbar.addWidget(self.export_btn)
-        toolbar.addWidget(self.process_btn)
-        toolbar.addWidget(self.stop_btn)
-        toolbar.addWidget(self.save_db_btn)
-        toolbar.addWidget(self.load_db_btn)
-        toolbar.addWidget(self.clear_responses_btn)
-        toolbar.addStretch()
+        # Add buttons to toolbar with alignment
+        toolbar.addWidget(self.import_folder_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+        toolbar.addWidget(self.import_excel_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+        toolbar.addWidget(self.export_excel_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+        toolbar.addWidget(self.config_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+        toolbar.addWidget(self.process_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+        toolbar.addWidget(self.stop_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+        toolbar.addWidget(self.clear_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+        toolbar.addStretch()  # Add stretch at the end to push buttons to the left
         
-        # Progress section
+        # Add toolbar to main layout
+        layout.addLayout(toolbar)
+
+        # Progress section below toolbar
         progress_layout = QHBoxLayout()
         self.progress_bar = QProgressBar()
         self.status_label = QLabel("Ready")
         progress_layout.addWidget(self.progress_bar)
         progress_layout.addWidget(self.status_label)
+        layout.addLayout(progress_layout)
 
+        # Create a splitter for the content viewer and table
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        
+        # Content viewer
+        self.content_viewer = QTextEdit()
+        self.content_viewer.setReadOnly(True)
+        self.content_viewer.setMinimumHeight(50)  # Minimum height when collapsed
+        self.content_viewer.setPlaceholderText("Click a cell to view its contents...")
+        splitter.addWidget(self.content_viewer)
+        
         # Table
         self.table = QTableWidget()
         self.table.setColumnCount(3)
         self.table.setHorizontalHeaderLabels(["Filename", "Source Doc", "Response"])
-        self.table.horizontalHeader().setStretchLastSection(True)
-
-        # Add all components to main layout
-        layout.addLayout(toolbar)
-        layout.addLayout(progress_layout)
-        layout.addWidget(self.table)
+        
+        # Set minimum column widths but allow resizing
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.table.horizontalHeader().setMinimumSectionSize(100)  # Minimum width for all columns
+        self.table.setColumnWidth(0, 200)  # Initial width for Filename
+        self.table.setColumnWidth(1, 300)  # Initial width for Source Doc
+        self.table.setColumnWidth(2, 500)  # Initial width for Response
+        
+        # Set strict fixed row height
+        self.table.verticalHeader().setDefaultSectionSize(30)
+        self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
+        self.table.verticalHeader().setMinimumSectionSize(30)
+        self.table.verticalHeader().setMaximumSectionSize(30)
+        
+        # Disable word wrap to prevent height changes
+        self.table.setWordWrap(False)
+        
+        # Add table to splitter
+        splitter.addWidget(self.table)
+        
+        # Set initial sizes for splitter (content viewer : table ratio)
+        splitter.setSizes([100, 500])
+        
+        # Add splitter to main layout
+        layout.addWidget(splitter)
 
         # Connect signals
         self.config_btn.clicked.connect(self.show_config_dialog)
         self.import_excel_btn.clicked.connect(self.import_excel)
         self.import_folder_btn.clicked.connect(self.import_folder)
-        self.export_btn.clicked.connect(self.export_excel)
+        self.export_excel_btn.clicked.connect(self.export_excel)
         self.process_btn.clicked.connect(self.start_processing)
         self.stop_btn.clicked.connect(self.stop_processing)
-        self.save_db_btn.clicked.connect(self.save_database)
-        self.load_db_btn.clicked.connect(self.load_database)
-        self.clear_responses_btn.clicked.connect(self.clear_responses)
+        self.clear_btn.clicked.connect(self.clear_responses)
+        self.table.cellClicked.connect(self.update_content_viewer)
 
     def show_config_dialog(self):
         dialog = ConfigDialog(self)
@@ -323,20 +361,33 @@ class MainWindow(QMainWindow):
         if file_name:
             try:
                 data = []
+                print(f"Starting Excel export with {self.table.rowCount()} rows")  # Debug logging
                 for row in range(self.table.rowCount()):
                     filename = self.table.item(row, 0)
                     source = self.table.item(row, 1)
                     response = self.table.item(row, 2)
-                    data.append({
+                    
+                    # Debug logging for row 18
+                    if row == 18:
+                        print(f"Row 18 data:")
+                        print(f"  Filename: {filename.text() if filename else 'None'}")
+                        print(f"  Source: {source.text()[:50] if source else 'None'}...")
+                        print(f"  Response: {response.text()[:50] if response else 'None'}...")
+                    
+                    row_data = {
                         "Filename": filename.text() if filename else "",
                         "Source Doc": source.text() if source else "",
                         "Response": response.text() if response else ""
-                    })
-                
+                    }
+                    data.append(row_data)
+                    
+                print(f"Created data list with {len(data)} rows")  # Debug logging
                 df = pd.DataFrame(data)
+                print(f"Created DataFrame with shape: {df.shape}")  # Debug logging
                 df.to_excel(file_name, index=False)
                 QMessageBox.information(self, "Success", "Data exported successfully")
             except Exception as e:
+                print(f"Export error: {str(e)}")  # Debug logging
                 QMessageBox.critical(self, "Error", f"Failed to export: {str(e)}")
 
     def start_processing(self):
@@ -363,8 +414,10 @@ class MainWindow(QMainWindow):
                     "content": source.text().strip()
                 })
 
-        # Start processing
-        self.progress_bar.setMaximum(len(documents))
+        # Set up progress bar
+        total_documents = len(documents)
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(total_documents * 100)  # Multiply by 100 for percentage
         self.progress_bar.setValue(0)
         self.status_label.setText("Processing...")
         
@@ -381,8 +434,10 @@ class MainWindow(QMainWindow):
         self.processing_thread.start()
 
     def update_progress(self, current, total):
-        self.progress_bar.setValue(current)
-        self.status_label.setText(f"Processing: {current}/{total}")
+        # Convert progress to percentage (0-100) and scale to progress bar range
+        progress_value = int((current / total) * 100 * total)
+        self.progress_bar.setValue(progress_value)
+        self.status_label.setText(f"Processing: {current}/{total} ({int((current/total)*100)}%)")
 
     def show_error(self, error_message):
         QMessageBox.critical(self, "Error", error_message)
@@ -395,7 +450,44 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Success", "Batch processing completed")
 
     def update_table_response(self, row, response):
-        self.table.setItem(row, 2, QTableWidgetItem(response))
+        """Update a response in the table"""
+        print(f"Starting update_table_response for row {row}...")  # Debug logging
+        try:
+            print(f"Current table row count: {self.table.rowCount()}")  # Debug logging
+            print(f"Creating QTableWidgetItem for row {row}, column 2")  # Debug logging
+            item = QTableWidgetItem(response)
+            
+            # Special logging for row 18
+            if row == 18:
+                print(f"Row 18 update details:")
+                print(f"  Response content: {response[:100]}...")
+                print(f"  Item created successfully: {item is not None}")
+                print(f"  Item text: {item.text()[:100]}...")
+            
+            print(f"Setting item for row {row}, column 2")  # Debug logging
+            self.table.setItem(row, 2, item)
+            print(f"Successfully updated row {row}")  # Debug logging
+            
+            # Verify the update
+            updated_item = self.table.item(row, 2)
+            if updated_item:
+                print(f"Verified update for row {row}: {updated_item.text()[:50]}...")  # Debug logging
+                if row == 18:
+                    print("Row 18 verification:")
+                    print(f"  Item exists: {updated_item is not None}")
+                    print(f"  Item text length: {len(updated_item.text())}")
+                    print(f"  Item text: {updated_item.text()[:100]}...")
+            else:
+                print(f"Warning: Could not verify update for row {row}")  # Debug logging
+            
+            # Force table refresh
+            self.table.viewport().update()
+            self.table.resizeRowToContents(row)
+            self.table.scrollToItem(self.table.item(row, 2))
+            
+        except Exception as e:
+            print(f"Error updating row {row}: {str(e)}")  # Debug logging
+            QMessageBox.critical(self, "Error", f"Failed to update row {row}: {str(e)}")
 
     def update_status(self, message: str):
         """Update the status label with a message"""
@@ -532,4 +624,14 @@ class MainWindow(QMainWindow):
             )
             await conn.commit()
         finally:
-            await self.db_manager.release_connection(conn) 
+            await self.db_manager.release_connection(conn)
+
+    def update_content_viewer(self, row, column):
+        """Update the content viewer when a cell is clicked"""
+        item = self.table.item(row, column)
+        if item:
+            self.content_viewer.setText(item.text())
+            # Select the text in the viewer but don't scroll
+            cursor = self.content_viewer.textCursor()
+            cursor.select(cursor.SelectionType.Document)
+            self.content_viewer.setTextCursor(cursor) 
