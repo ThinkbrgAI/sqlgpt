@@ -199,6 +199,7 @@ class MainWindow(QMainWindow):
         self.stop_btn = QPushButton("Stop Processing")
         self.save_db_btn = QPushButton("Save Database")
         self.load_db_btn = QPushButton("Load Database")
+        self.clear_responses_btn = QPushButton("Clear Responses")
         
         # Initially disable stop button
         self.stop_btn.setEnabled(False)
@@ -211,6 +212,7 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self.stop_btn)
         toolbar.addWidget(self.save_db_btn)
         toolbar.addWidget(self.load_db_btn)
+        toolbar.addWidget(self.clear_responses_btn)
         toolbar.addStretch()
         
         # Progress section
@@ -240,6 +242,7 @@ class MainWindow(QMainWindow):
         self.stop_btn.clicked.connect(self.stop_processing)
         self.save_db_btn.clicked.connect(self.save_database)
         self.load_db_btn.clicked.connect(self.load_database)
+        self.clear_responses_btn.clicked.connect(self.clear_responses)
 
     def show_config_dialog(self):
         dialog = ConfigDialog(self)
@@ -486,4 +489,47 @@ class MainWindow(QMainWindow):
                 loop.run_until_complete(self.load_table_data())
                 QMessageBox.information(self, "Success", "Database loaded successfully")
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to load database: {str(e)}") 
+                QMessageBox.critical(self, "Error", f"Failed to load database: {str(e)}")
+
+    def clear_responses(self):
+        """Clear all responses from the table and database"""
+        if self.processing_thread and self.processing_thread.isRunning():
+            QMessageBox.warning(self, "Warning", "Please wait for processing to complete before clearing responses")
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Confirm Clear",
+            "Are you sure you want to clear all responses? This cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                # Clear responses in the table
+                for row in range(self.table.rowCount()):
+                    if self.table.item(row, 2):  # Response column
+                        self.table.setItem(row, 2, QTableWidgetItem(""))
+                
+                # Clear responses in the database
+                loop = asyncio.get_event_loop()
+                loop.run_until_complete(self.clear_responses_in_db())
+                
+                self.status_label.setText("Responses cleared")
+                QMessageBox.information(self, "Success", "All responses have been cleared")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to clear responses: {str(e)}")
+
+    async def clear_responses_in_db(self):
+        """Clear all responses in the database"""
+        conn = await self.db_manager.get_connection()
+        try:
+            await conn.execute(
+                """UPDATE processing_jobs 
+                   SET response = NULL, 
+                       token_count = 0,
+                       status = 'pending'"""
+            )
+            await conn.commit()
+        finally:
+            await self.db_manager.release_connection(conn) 

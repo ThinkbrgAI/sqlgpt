@@ -57,7 +57,7 @@ class ConfigDialog(QDialog):
         tokens_layout.addWidget(QLabel("Max Completion Tokens:"))
         self.max_tokens = QSpinBox()
         self.max_tokens.setRange(1, 100000)
-        self.max_tokens.setValue(config.max_completion_tokens)
+        self.max_tokens.setValue(config._get_model_max_completion_tokens(config.selected_model))
         tokens_layout.addWidget(self.max_tokens)
         params_layout.addLayout(tokens_layout)
 
@@ -105,26 +105,38 @@ class ConfigDialog(QDialog):
         # Connect signals
         save_button.clicked.connect(self.save_config)
         cancel_button.clicked.connect(self.reject)
-        self.model_combo.currentTextChanged.connect(self.update_model_info)
+        self.model_combo.currentTextChanged.connect(self.on_model_changed)
+
+    def on_model_changed(self, model_name: str):
+        """Update max tokens and model info when model selection changes"""
+        self.max_tokens.setValue(config._get_model_max_completion_tokens(model_name))
+        self.update_model_info()
+        # Enable/disable reasoning effort based on model type
+        self.reasoning_effort.setEnabled(model_name.startswith("o"))
 
     def update_model_info(self):
         """Update the model information text based on selected model"""
         model = self.model_combo.currentText()
+        max_tokens = config._model_rate_limits[model]["max_completion_tokens"]
+        recommended_tokens = config._get_model_max_completion_tokens(model)
+        
         if model.startswith("o"):
             self.reasoning_effort.setEnabled(True)
             self.model_info.setText(
-                "OpenAI Reasoning Model\n"
-                "• Uses reasoning tokens for complex problem solving\n"
-                "• Adjust reasoning effort to balance speed vs. thoroughness\n"
-                "• Reserves tokens for internal reasoning process"
+                f"OpenAI Reasoning Model\n"
+                f"• Max tokens: {max_tokens}\n"
+                f"• Recommended completion tokens: {recommended_tokens}\n"
+                f"• Uses reasoning tokens for complex problem solving\n"
+                f"• Adjust reasoning effort to balance speed vs. thoroughness"
             )
         else:
             self.reasoning_effort.setEnabled(False)
             self.model_info.setText(
-                "Anthropic Claude Model\n"
-                "• Standard completion model\n"
-                "• No additional configuration needed\n"
-                "• Rate limits: 4,000 RPM, 200K input TPM, 80K output TPM"
+                f"Anthropic Claude Model\n"
+                f"• Max tokens: {max_tokens}\n"
+                f"• Recommended completion tokens: {recommended_tokens}\n"
+                f"• Standard completion model\n"
+                f"• Rate limits: 4,000 RPM, 200K input TPM, 80K output TPM"
             )
 
     def save_config(self):

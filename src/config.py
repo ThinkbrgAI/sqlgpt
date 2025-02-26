@@ -20,7 +20,6 @@ class Config:
         self.max_tokens: int = 4096
         self.batch_size: int = 10
         self.reasoning_effort: str = "high"
-        self.max_completion_tokens: int = 1000
         self._allowed_models = {
             "o1",  # Advanced OpenAI model
             "o3-mini",  # Fast OpenAI model
@@ -30,18 +29,30 @@ class Config:
             "o1": {  # Advanced model
                 "requests_per_minute": 1000,
                 "tokens_per_minute": 30000000,
-                "tokens_per_day": 10000000000
+                "tokens_per_day": 10000000000,
+                "max_completion_tokens": 4096
             },
             "o3-mini": {  # Faster model
                 "requests_per_minute": 30000,
-                "tokens_per_minute": 150000000
+                "tokens_per_minute": 150000000,
+                "max_completion_tokens": 4096
             },
             "claude-3-7-sonnet-20250219": {
                 "requests_per_minute": 4000,
                 "input_tokens_per_minute": 200000,
-                "output_tokens_per_minute": 80000
+                "output_tokens_per_minute": 80000,
+                "max_completion_tokens": 4096
             }
         }
+        # Set initial max_completion_tokens based on default model
+        self.max_completion_tokens = self._get_model_max_completion_tokens(self.selected_model)
+
+    def _get_model_max_completion_tokens(self, model: str) -> int:
+        """Get the recommended max completion tokens for a model"""
+        # Get the model's max completion tokens, default to 2048 if not specified
+        max_tokens = self._model_rate_limits.get(model, {}).get("max_completion_tokens", 2048)
+        # Leave some room for the completion (use 75% of max)
+        return int(max_tokens * 0.75)
 
     def load_from_env(self):
         """Load configuration from environment variables"""
@@ -120,6 +131,8 @@ class Config:
         if model not in self._allowed_models:
             raise ValueError(f"Model {model} is not allowed. Must be one of: {', '.join(self._allowed_models)}")
         self.selected_model = model
+        # Update max_completion_tokens based on the new model
+        self.max_completion_tokens = self._get_model_max_completion_tokens(model)
         return True
 
     @property
