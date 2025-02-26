@@ -1,0 +1,6 @@
+Filename,Source Doc,Response
+q1.txt,"Explain the concept of quantum computing in simple terms. How does it differ from classical computing?",
+q2.txt,"What are the key differences between REST and GraphQL APIs? When should each be used?",
+q3.txt,"Describe the SOLID principles in software engineering and provide real-world examples.",
+q4.txt,"What is technical debt? How can it be managed effectively in software projects?",
+q5.txt,"Explain the CAP theorem in distributed systems. How does it affect system design?", 

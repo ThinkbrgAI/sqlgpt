@@ -1,0 +1,10 @@
+Compare and contrast machine learning algorithms:
+1. Support Vector Machines
+2. Random Forests
+3. Neural Networks
+
+Focus on:
+- Use cases
+- Advantages
+- Disadvantages
+- Performance characteristics 
