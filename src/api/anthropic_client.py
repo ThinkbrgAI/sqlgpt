@@ -16,7 +16,7 @@ class AnthropicClient:
 
     def set_api_key(self, api_key: str):
         self.api_key = api_key
-        self.client = anthropic.Anthropic(api_key=api_key)
+        self.client = anthropic.AsyncAnthropic(api_key=api_key)
 
     async def process_document(self, document: str) -> tuple[str, int]:
         """Process a document through the Anthropic API"""
@@ -24,7 +24,8 @@ class AnthropicClient:
             raise ValueError("API key not set")
 
         try:
-            message = self.client.messages.create(
+            print(f"Sending request to Claude with model: {config.selected_model}")
+            message = await self.client.messages.create(
                 model=config.selected_model,
                 max_tokens=config.max_tokens,
                 messages=[
@@ -32,17 +33,29 @@ class AnthropicClient:
                 ],
                 system=config.system_prompt
             )
+            print("Claude response received successfully")
 
-            response_text = message.content[0].text
-            # Anthropic provides usage in the response
-            token_count = message.usage.input_tokens + message.usage.output_tokens
-            
-            return response_text, token_count
+            try:
+                response_text = message.content[0].text
+                token_count = message.usage.input_tokens + message.usage.output_tokens
+                return response_text, token_count
+            except (AttributeError, IndexError) as e:
+                print(f"Error parsing Claude response: {str(e)}")
+                print(f"Raw response: {message}")
+                raise Exception(f"Failed to parse Claude response: {str(e)}")
 
         except anthropic.RateLimitError as e:
+            print(f"Claude rate limit exceeded: {str(e)}")
             raise Exception(f"Rate limit exceeded: {str(e)}")
-        except Exception as e:
+        except anthropic.APIError as e:
+            print(f"Claude API error: {str(e)}")
             raise Exception(f"API Error: {str(e)}")
+        except anthropic.APIConnectionError as e:
+            print(f"Claude connection error: {str(e)}")
+            raise Exception(f"Connection Error: {str(e)}")
+        except Exception as e:
+            print(f"Unexpected error with Claude API: {str(e)}")
+            raise Exception(f"Unexpected error: {str(e)}")
 
     def get_rate_limits(self, model: str) -> dict:
         """Get rate limits for a specific model"""

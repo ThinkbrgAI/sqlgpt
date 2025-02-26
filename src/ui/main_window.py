@@ -89,8 +89,12 @@ class ProcessingThread(QThread):
     async def process_document(self, job, client):
         """Process a single document"""
         try:
+            if self.should_stop:
+                return False
             print(f"Processing document for row {job['row_index']}...")  # Debug logging
             response, token_count = await client.process_document(job["source_doc"])
+            if self.should_stop:  # Check again after API call
+                return False
             await self.db_manager.update_response(job["id"], response, token_count)
             print(f"Emitting update_response signal for row {job['row_index']}...")  # Debug logging
             self.update_response.emit(job["row_index"], response)
@@ -107,54 +111,79 @@ class ProcessingThread(QThread):
             if self.model_name.startswith("o"):
                 client = openai_client
                 client.set_api_key(config.openai_api_key)
+                # OpenAI models have very high rate limits
+                if self.model_name == "o1":
+                    max_concurrent = min(config.batch_size, 100)  # 1000 RPM -> conservative 100 concurrent
+                else:  # o3-mini
+                    max_concurrent = min(config.batch_size, 300)  # 30000 RPM -> conservative 300 concurrent
             else:
                 client = anthropic_client
                 client.set_api_key(config.anthropic_api_key)
+                # Claude can handle large concurrent requests
+                max_concurrent = min(config.batch_size, 100)  # 4000 RPM -> conservative 100 concurrent
 
             # Add batch to database
             batch_id = await self.db_manager.add_batch(self.documents, self.model_name)
             pending_jobs = await self.db_manager.get_pending_jobs(batch_id)
 
-            # Process in parallel batches
-            batch_size = min(config.batch_size, 100)
+            # Process in parallel
             total_jobs = len(pending_jobs)
             processed = 0
+            active_tasks = set()
 
-            while pending_jobs and not self.should_stop:
-                current_batch = []
-                current_size = 0
+            while (pending_jobs or active_tasks) and not self.should_stop:
+                # Start new tasks up to max_concurrent
+                while len(active_tasks) < max_concurrent and pending_jobs and not self.should_stop:
+                    job = pending_jobs.pop(0)
+                    task = asyncio.create_task(self.process_document(job, client))
+                    active_tasks.add(task)
+                    task.add_done_callback(active_tasks.discard)
+
+                if not active_tasks:
+                    break
+
+                # Wait for at least one task to complete
+                done, _ = await asyncio.wait(active_tasks, return_when=asyncio.FIRST_COMPLETED)
                 
-                # Build batch based on rate limits
-                while pending_jobs and current_size < batch_size:
-                    if self.rate_limiter.can_make_request():
-                        current_batch.append(pending_jobs.pop(0))
-                        current_size += 1
-                    else:
-                        # Wait if we hit rate limits
-                        self.status_update.emit("Rate limit reached, waiting...")
-                        await asyncio.sleep(1)
-                        continue
+                # Process completed tasks
+                for task in done:
+                    try:
+                        result = task.result()
+                        if result:
+                            processed += 1
+                    except Exception as e:
+                        self.error.emit(f"Task error: {str(e)}")
 
-                if not current_batch:
-                    continue
-
-                # Process current batch in parallel
-                self.status_update.emit(f"Processing batch of {len(current_batch)} documents...")
-                tasks = []
-                for job in current_batch:
-                    if self.should_stop:
-                        break
-                    tasks.append(self.process_document(job, client))
-
-                # Wait for all tasks to complete
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-                processed += sum(1 for r in results if r is True)
+                # Update progress
                 self.progress.emit(processed, total_jobs)
+                self.status_update.emit(f"Processing: {len(active_tasks)} active tasks, {len(pending_jobs)} pending")
 
+                # If we got any failures, slow down a bit
+                if len(done) > 0 and not any(t.result() for t in done if not t.exception()):
+                    await asyncio.sleep(1)
+
+                # Check stop flag
+                if self.should_stop:
+                    # Cancel all active tasks
+                    for task in active_tasks:
+                        if not task.done():
+                            task.cancel()
+                    # Wait for tasks to complete/cancel
+                    try:
+                        await asyncio.gather(*active_tasks, return_exceptions=True)
+                    except asyncio.CancelledError:
+                        pass
+                    break
+
+            if self.should_stop:
+                self.status_update.emit("Processing stopped by user")
+            else:
+                self.status_update.emit("Processing completed")
             self.finished.emit()
 
         except Exception as e:
             self.error.emit(f"Batch processing error: {str(e)}")
+            self.finished.emit()
 
     def run(self):
         """Run the processing thread"""
@@ -167,7 +196,9 @@ class ProcessingThread(QThread):
 
     def stop(self):
         """Stop processing"""
+        print("Stopping processing...")  # Debug logging
         self.should_stop = True
+        self.status_update.emit("Stopping... Please wait for in-progress tasks to complete...")
 
 
 class MainWindow(QMainWindow):
@@ -504,7 +535,7 @@ class MainWindow(QMainWindow):
             )
             if reply == QMessageBox.StandardButton.Yes:
                 self.processing_thread.stop()
-                self.status_label.setText("Stopping... Please wait...")
+                self.status_label.setText("Stopping... Please wait for in-progress tasks to complete...")
                 self.stop_btn.setEnabled(False)
 
     def closeEvent(self, event):
