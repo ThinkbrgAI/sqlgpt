@@ -1,4 +1,4 @@
-# Python
+# Python bytecode
 __pycache__/
 *.py[cod]
 *$py.class
@@ -20,13 +20,13 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual Environment
+# Virtual environments
 venv/
 ENV/
 env/
 .env
 
-# IDE
+# IDE files
 .idea/
 .vscode/
 *.swp
@@ -35,7 +35,7 @@ env/
 .pydevproject
 .settings/
 
-# Database
+# Database files
 *.db
 *.db-journal
 *.db-shm
@@ -62,4 +62,27 @@ config.json
 # OS-specific
 .DS_Store
 Thumbs.db
-desktop.ini 
+desktop.ini
+
+# Temporary files
+temp_*/
+*.tmp
+*.temp
+
+# Output files
+*.xlsx
+*.md
+!README.md
+!BATCH_PROCESSING.md
+!ENHANCED_TABLE_EXTRACTION.md
+!EXCEL_EXPORT_FIX.md
+!MARKITDOWN_README.md
+!MARKITDOWN_USER_GUIDE.md
+!plan.md
+
+# Test files
+test_*.pdf
+test_*.xlsx
+
+# Version files
+*.*.*/ 

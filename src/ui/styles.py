@@ -17,14 +17,48 @@ QPushButton {
     padding: 5px 15px;
     min-width: 100px;
     min-height: 25px;
+    margin: 2px;
 }
 
 QPushButton:hover {
     background-color: #4d4d4d;
+    border-color: #777777;
 }
 
 QPushButton:pressed {
     background-color: #555555;
+}
+
+QPushButton:disabled {
+    background-color: #2d2d2d;
+    color: #777777;
+    border-color: #444444;
+}
+
+QPushButton#import_btn, QPushButton#import_folder_btn {
+    background-color: #1565c0;  /* Blue */
+    border-color: #0d47a1;
+}
+
+QPushButton#import_btn:hover, QPushButton#import_folder_btn:hover {
+    background-color: #1976d2;  /* Lighter blue */
+}
+
+QPushButton#import_btn:pressed, QPushButton#import_folder_btn:pressed {
+    background-color: #0d47a1;  /* Darker blue */
+}
+
+QPushButton#export_btn, QPushButton#import_excel_btn {
+    background-color: #00695c;  /* Teal */
+    border-color: #004d40;
+}
+
+QPushButton#export_btn:hover, QPushButton#import_excel_btn:hover {
+    background-color: #00796b;  /* Lighter teal */
+}
+
+QPushButton#export_btn:pressed, QPushButton#import_excel_btn:pressed {
+    background-color: #004d40;  /* Darker teal */
 }
 
 QPushButton#process_btn {
@@ -51,6 +85,32 @@ QPushButton#stop_btn:hover {
 
 QPushButton#stop_btn:pressed {
     background-color: #b71c1c;  /* Darker red */
+}
+
+QPushButton#clear_btn, QPushButton#clear_all_btn {
+    background-color: #7b1fa2;  /* Purple */
+    border-color: #6a1b9a;
+}
+
+QPushButton#clear_btn:hover, QPushButton#clear_all_btn:hover {
+    background-color: #8e24aa;  /* Lighter purple */
+}
+
+QPushButton#clear_btn:pressed, QPushButton#clear_all_btn:pressed {
+    background-color: #6a1b9a;  /* Darker purple */
+}
+
+QPushButton#config_btn {
+    background-color: #f57c00;  /* Orange */
+    border-color: #e65100;
+}
+
+QPushButton#config_btn:hover {
+    background-color: #fb8c00;  /* Lighter orange */
+}
+
+QPushButton#config_btn:pressed {
+    background-color: #e65100;  /* Darker orange */
 }
 
 QLineEdit, QTextEdit, QSpinBox, QComboBox {
