@@ -86,3 +86,7 @@ test_*.xlsx
 
 # Version files
 *.*.*/ 
+
+# Ensure resources directory is included
+!resources/
+!resources/* 

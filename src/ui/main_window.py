@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QTextEdit, QSplitter, QDialog, QApplication, QFrame
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject, QTimer
-from PyQt6.QtGui import QAction
+from PyQt6.QtGui import QAction, QPixmap
 import pandas as pd
 from ..config import config
 from .config_dialog import ConfigDialog
@@ -21,6 +21,7 @@ from ..database.manager import DatabaseManager
 from ..api.openai_client import openai_client
 from ..api.anthropic_client import anthropic_client
 from ..api.llamaparse_client import llamaparse_client
+from ..api.markitdown_client import markitdown_client
 from .styles import DARK_THEME
 import json
 
@@ -327,7 +328,7 @@ class ProgressDialog(QDialog):
 
     def was_cancelled(self):
         """Check if the user cancelled the operation"""
-        return self._user_cancelled or self.result() == QDialog.DialogCode.Rejected
+        return self._user_cancelled
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -352,40 +353,80 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
 
+        # Add company header image
+        header_layout = QHBoxLayout()
+        header_image_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
+                                        "resources", "BRG Personal Header 4.jpg")
+        
+        if os.path.exists(header_image_path):
+            header_label = QLabel()
+            pixmap = QPixmap(header_image_path)
+            # Scale the image to fit the width while maintaining aspect ratio
+            scaled_pixmap = pixmap.scaledToWidth(780, Qt.TransformationMode.SmoothTransformation)
+            header_label.setPixmap(scaled_pixmap)
+            header_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            header_layout.addWidget(header_label)
+            layout.addLayout(header_layout)
+            
+            # Add some spacing after the header
+            layout.addSpacing(10)
+        else:
+            print(f"Warning: Header image not found at {header_image_path}")
+
         # Create toolbar
         toolbar = QHBoxLayout()
         toolbar.setSpacing(6)  # Set spacing between buttons
         toolbar.setContentsMargins(6, 6, 6, 6)  # Set margins around buttons
         
-        # Add buttons
+        # Add buttons to toolbar
+        self.import_btn = QPushButton("Import PDF")
+        self.import_btn.setObjectName("import_btn")
+        self.import_btn.clicked.connect(self.handle_import_pdf)
+        toolbar.addWidget(self.import_btn, 0, Qt.AlignmentFlag.AlignLeft)
+        
         self.import_folder_btn = QPushButton("Import Folder")
-        self.import_excel_btn = QPushButton("Import Excel")
-        self.import_pdf_btn = QPushButton("Convert Files to MD")
-        self.import_folder_pdf_btn = QPushButton("Convert Folder to MD")
-        print("Created Convert Folder to MD button")
-        self.export_excel_btn = QPushButton("Export Excel")
-        self.config_btn = QPushButton("Configure")
-        self.process_btn = QPushButton("Process Batch")
-        self.stop_btn = QPushButton("Stop")
-        self.clear_btn = QPushButton("Clear Responses")
+        self.import_folder_btn.setObjectName("import_folder_btn")
+        self.import_folder_btn.clicked.connect(self.handle_import_folder_pdf)
+        toolbar.addWidget(self.import_folder_btn, 0, Qt.AlignmentFlag.AlignLeft)
         
-        # Set object names for styling
+        self.process_btn = QPushButton("Process with GPT")
         self.process_btn.setObjectName("process_btn")
-        self.stop_btn.setObjectName("stop_btn")
+        self.process_btn.clicked.connect(self.start_processing)
+        toolbar.addWidget(self.process_btn, 0, Qt.AlignmentFlag.AlignLeft)
         
-        # Add buttons to toolbar with alignment
-        toolbar.addWidget(self.import_folder_btn, alignment=Qt.AlignmentFlag.AlignLeft)
-        toolbar.addWidget(self.import_excel_btn, alignment=Qt.AlignmentFlag.AlignLeft)
-        toolbar.addWidget(self.import_pdf_btn, alignment=Qt.AlignmentFlag.AlignLeft)
-        toolbar.addWidget(self.import_folder_pdf_btn, alignment=Qt.AlignmentFlag.AlignLeft)
-        toolbar.addWidget(self.export_excel_btn, alignment=Qt.AlignmentFlag.AlignLeft)
-        toolbar.addWidget(self.config_btn, alignment=Qt.AlignmentFlag.AlignLeft)
-        toolbar.addWidget(self.process_btn, alignment=Qt.AlignmentFlag.AlignLeft)
-        toolbar.addWidget(self.stop_btn, alignment=Qt.AlignmentFlag.AlignLeft)
-        toolbar.addWidget(self.clear_btn, alignment=Qt.AlignmentFlag.AlignLeft)
-        toolbar.addStretch()  # Add stretch at the end to push buttons to the left
+        self.stop_btn = QPushButton("Stop Processing")
+        self.stop_btn.setObjectName("stop_btn")
+        self.stop_btn.clicked.connect(self.stop_processing)
+        self.stop_btn.setEnabled(False)
+        toolbar.addWidget(self.stop_btn, 0, Qt.AlignmentFlag.AlignLeft)
+        
+        self.clear_btn = QPushButton("Clear Responses")
+        self.clear_btn.setObjectName("clear_btn")
+        self.clear_btn.clicked.connect(self.clear_responses)
+        toolbar.addWidget(self.clear_btn, 0, Qt.AlignmentFlag.AlignLeft)
+        
+        self.clear_all_btn = QPushButton("Clear All Data")
+        self.clear_all_btn.setObjectName("clear_all_btn")
+        self.clear_all_btn.clicked.connect(self.clear_all_data)
+        toolbar.addWidget(self.clear_all_btn, 0, Qt.AlignmentFlag.AlignLeft)
+        
+        self.export_btn = QPushButton("Export to Excel")
+        self.export_btn.setObjectName("export_btn")
+        self.export_btn.clicked.connect(self.export_excel)
+        toolbar.addWidget(self.export_btn, 0, Qt.AlignmentFlag.AlignLeft)
+        
+        self.import_excel_btn = QPushButton("Import from Excel")
+        self.import_excel_btn.setObjectName("import_excel_btn")
+        self.import_excel_btn.clicked.connect(self.import_excel)
+        toolbar.addWidget(self.import_excel_btn, 0, Qt.AlignmentFlag.AlignLeft)
+        
+        self.config_btn = QPushButton("Configure")
+        self.config_btn.setObjectName("config_btn")
+        self.config_btn.clicked.connect(self.show_config_dialog)
+        toolbar.addWidget(self.config_btn, 0, Qt.AlignmentFlag.AlignLeft)
         
         # Add toolbar to main layout
+        toolbar.addStretch(1)  # Add stretch to prevent buttons from expanding
         layout.addLayout(toolbar)
 
         # Progress section below toolbar
@@ -439,11 +480,6 @@ class MainWindow(QMainWindow):
         # Connect signals
         self.config_btn.clicked.connect(self.show_config_dialog)
         self.import_excel_btn.clicked.connect(self.import_excel)
-        self.import_folder_btn.clicked.connect(self.import_folder)
-        self.import_pdf_btn.clicked.connect(self.handle_import_pdf)
-        print("Connecting Convert Folder to MD button to handler")
-        self.import_folder_pdf_btn.clicked.connect(self.handle_import_folder_pdf)
-        self.export_excel_btn.clicked.connect(self.export_excel)
         self.process_btn.clicked.connect(self.start_processing)
         self.stop_btn.clicked.connect(self.stop_processing)
         self.clear_btn.clicked.connect(self.clear_responses)
@@ -480,7 +516,10 @@ class MainWindow(QMainWindow):
         if folder_path:
             try:
                 documents = []
-                for ext in ['.txt', '.md']:
+                # Support all text-based formats that can be directly read
+                text_extensions = ['.txt', '.md', '.csv', '.json', '.xml', '.html', '.htm']
+                
+                for ext in text_extensions:
                     for file_path in Path(folder_path).rglob(f'*{ext}'):
                         try:
                             with open(file_path, 'r', encoding='utf-8') as f:
@@ -495,7 +534,19 @@ class MainWindow(QMainWindow):
                             continue
 
                 if not documents:
-                    QMessageBox.warning(self, "Warning", "No valid text files found in the selected folder")
+                    # If no text files found, suggest using the Convert Folder to MD option
+                    reply = QMessageBox.question(
+                        self,
+                        "No Text Files Found",
+                        "No valid text files found in the selected folder.\n\n"
+                        "Would you like to use the 'Convert Folder to MD' feature instead? "
+                        "This can convert PDFs, Office documents, images, and other file types to Markdown.",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                    )
+                    
+                    if reply == QMessageBox.StandardButton.Yes:
+                        # Call the import_folder_pdf handler
+                        self.handle_import_folder_pdf()
                     return
 
                 # Update table
@@ -525,6 +576,12 @@ class MainWindow(QMainWindow):
                 
                 # Update table
                 self.table.setRowCount(len(df))
+                
+                # Sort by Row Number if it exists
+                if "Row Number" in df.columns:
+                    print("Found Row Number column, sorting by it...")
+                    df = df.sort_values(by="Row Number")
+                
                 for i, row in df.iterrows():
                     # Use Excel filename as default if not specified
                     filename = row.get("Filename", os.path.basename(file_name))
@@ -533,8 +590,13 @@ class MainWindow(QMainWindow):
                     if "Response" in df.columns and pd.notna(row["Response"]):
                         self.table.setItem(i, 2, QTableWidgetItem(str(row["Response"])))
                 
+                # Save to database
+                self.save_database()
+                
                 QMessageBox.information(self, "Success", "Data imported successfully")
             except Exception as e:
+                import traceback
+                traceback.print_exc()
                 QMessageBox.critical(self, "Error", f"Failed to import: {str(e)}")
 
     def export_excel(self):
@@ -549,32 +611,80 @@ class MainWindow(QMainWindow):
             try:
                 data = []
                 print(f"Starting Excel export with {self.table.rowCount()} rows")  # Debug logging
+                
+                # Excel has a cell size limit of approximately 32,767 characters
+                max_cell_size = 32000  # Setting slightly below the limit for safety
+                
                 for row in range(self.table.rowCount()):
                     filename = self.table.item(row, 0)
                     source = self.table.item(row, 1)
                     response = self.table.item(row, 2)
                     
-                    # Debug logging for row 18
-                    if row == 18:
-                        print(f"Row 18 data:")
-                        print(f"  Filename: {filename.text() if filename else 'None'}")
-                        print(f"  Source: {source.text()[:50] if source else 'None'}...")
-                        print(f"  Response: {response.text()[:50] if response else 'None'}...")
+                    # Debug logging for row data
+                    print(f"Row {row} data:")
+                    print(f"  Filename: {filename.text() if filename else 'None'}")
+                    print(f"  Source length: {len(source.text()) if source else 0} characters")
+                    print(f"  Response length: {len(response.text()) if response else 0} characters")
+                    
+                    # Get text values, truncating if necessary
+                    filename_text = filename.text() if filename else ""
+                    
+                    source_text = source.text() if source else ""
+                    if len(source_text) > max_cell_size:
+                        print(f"  Truncating Source Doc for row {row} (length: {len(source_text)})")
+                        source_text = source_text[:max_cell_size] + "... (truncated)"
+                    
+                    response_text = response.text() if response else ""
+                    if len(response_text) > max_cell_size:
+                        print(f"  Truncating Response for row {row} (length: {len(response_text)})")
+                        response_text = response_text[:max_cell_size] + "... (truncated)"
                     
                     row_data = {
-                        "Filename": filename.text() if filename else "",
-                        "Source Doc": source.text() if source else "",
-                        "Response": response.text() if response else ""
+                        "Row Number": row + 1,  # Add row number (1-indexed for user readability)
+                        "Filename": filename_text,
+                        "Source Doc": source_text,
+                        "Response": response_text
                     }
                     data.append(row_data)
                     
                 print(f"Created data list with {len(data)} rows")  # Debug logging
-                df = pd.DataFrame(data)
-                print(f"Created DataFrame with shape: {df.shape}")  # Debug logging
-                df.to_excel(file_name, index=False)
+                
+                # Try different export methods
+                try:
+                    print("Attempting standard export...")
+                    df = pd.DataFrame(data)
+                    print(f"Created DataFrame with shape: {df.shape}")  # Debug logging
+                    df.to_excel(file_name, index=False)
+                    print("Standard export successful")
+                except Exception as e1:
+                    print(f"Standard export failed: {str(e1)}")
+                    try:
+                        print("Attempting export with engine='openpyxl'...")
+                        df.to_excel(file_name, index=False, engine='openpyxl')
+                        print("Export with engine='openpyxl' successful")
+                    except Exception as e2:
+                        print(f"Export with engine='openpyxl' failed: {str(e2)}")
+                        # If all else fails, try CSV as a fallback
+                        try:
+                            print("Attempting CSV export as fallback...")
+                            csv_file = file_name.replace('.xlsx', '.csv')
+                            df.to_csv(csv_file, index=False)
+                            print(f"CSV export successful: {csv_file}")
+                            QMessageBox.information(
+                                self, 
+                                "CSV Export", 
+                                f"Excel export failed, but data was successfully exported to CSV: {csv_file}"
+                            )
+                            return
+                        except Exception as e3:
+                            print(f"CSV export failed: {str(e3)}")
+                            raise Exception(f"All export attempts failed")
+                
                 QMessageBox.information(self, "Success", "Data exported successfully")
             except Exception as e:
                 print(f"Export error: {str(e)}")  # Debug logging
+                import traceback
+                traceback.print_exc()
                 QMessageBox.critical(self, "Error", f"Failed to export: {str(e)}")
 
     def start_processing(self):
@@ -1028,17 +1138,34 @@ class MainWindow(QMainWindow):
 
     async def clear_responses_in_db(self):
         """Clear all responses in the database"""
-        conn = await self.db_manager.get_connection()
+        conn = None
         try:
-            await conn.execute(
-                """UPDATE processing_jobs 
-                   SET response = NULL, 
-                       token_count = 0,
-                       status = 'pending'"""
-            )
+            # Get a database connection
+            conn = await self.db_manager.get_connection()
+            
+            # Delete all records from processing_jobs table
+            await conn.execute("DELETE FROM processing_jobs")
+            
+            # Reset the auto-increment counter
+            await conn.execute("DELETE FROM sqlite_sequence WHERE name='processing_jobs'")
+            
+            # Commit the changes
             await conn.commit()
+            
+            # Vacuum the database to reclaim space
+            await conn.execute("VACUUM")
+            await conn.commit()
+            
+            print("Successfully cleared all data from the database")
+        except Exception as e:
+            print(f"Error clearing database: {str(e)}")
+            if conn:
+                await conn.rollback()  # Rollback any uncommitted changes
+            raise
         finally:
-            await self.db_manager.release_connection(conn)
+            # Always release the connection
+            if conn:
+                await self.db_manager.release_connection(conn) 
 
     def update_content_viewer(self, row, column):
         """Update the content viewer when a cell is clicked"""
@@ -1055,23 +1182,32 @@ class MainWindow(QMainWindow):
         try:
             file_dialog = QFileDialog()
             file_dialog.setFileMode(QFileDialog.FileMode.ExistingFiles)
-            file_dialog.setNameFilter(
-                "Supported Files (*.pdf *.docx *.doc *.pptx *.ppt *.jpg *.jpeg *.png);;PDF Files (*.pdf);;"
-                "Word Files (*.docx *.doc);;PowerPoint Files (*.pptx *.ppt);;Images (*.jpg *.jpeg *.png)"
-            )
+            
+            # Set file filters based on the selected conversion method
+            if config.document_conversion_method == "llamaparse":
+                file_dialog.setNameFilter(
+                    "Supported Files (*.pdf *.docx *.doc *.pptx *.ppt *.jpg *.jpeg *.png);;PDF Files (*.pdf);;"
+                    "Word Files (*.docx *.doc);;PowerPoint Files (*.pptx *.ppt);;Images (*.jpg *.jpeg *.png)"
+                )
+            else:  # markitdown
+                file_dialog.setNameFilter(
+                    "Supported Files (*.pdf *.docx *.doc *.pptx *.ppt *.xlsx *.xls *.jpg *.jpeg *.png *.html *.htm *.txt *.csv *.json *.xml *.wav *.mp3 *.zip);;PDF Files (*.pdf);;"
+                    "Word Files (*.docx *.doc);;PowerPoint Files (*.pptx *.ppt);;Excel Files (*.xlsx *.xls);;Images (*.jpg *.jpeg *.png);;"
+                    "Web Files (*.html *.htm);;Text Files (*.txt *.csv *.json *.xml);;Audio Files (*.wav *.mp3);;Archives (*.zip)"
+                )
             
             if file_dialog.exec():
                 filenames = file_dialog.selectedFiles()
                 if not filenames:
                     return
 
-                # Check if API key is set
-                if not config.llamaparse_api_key:
-                    QMessageBox.warning(self, "Warning", "Please configure LlamaParse API key first")
-                    return
-
-                # Set API key from config
-                llamaparse_client.set_api_key(config.llamaparse_api_key)
+                # Check if using LlamaParse and API key is set
+                if config.document_conversion_method == "llamaparse":
+                    if not config.llamaparse_api_key:
+                        QMessageBox.warning(self, "Warning", "Please configure LlamaParse API key first")
+                        return
+                    # Set API key from config
+                    llamaparse_client.set_api_key(config.llamaparse_api_key)
                 
                 # Create and show progress dialog
                 progress_dialog = ProgressDialog(self, len(filenames))
@@ -1094,17 +1230,32 @@ class MainWindow(QMainWindow):
                         
                         # Show progress in status bar
                         file_ext = os.path.splitext(filename)[1].lower()
-                        if file_ext == '.pdf' and config.llamaparse_max_pages > 0:
-                            status_msg = f"Extracting {config.llamaparse_max_pages} page(s) from {file_basename}"
-                            self.statusBar().showMessage(status_msg)
-                            progress_dialog.update_status(status_msg)
-                        else:
-                            status_msg = f"Converting {file_basename}"
-                            self.statusBar().showMessage(status_msg)
-                            progress_dialog.update_status(status_msg)
                         
-                        # Process the file
-                        result = await llamaparse_client.process_pdf(filename)
+                        # Process based on selected conversion method
+                        if config.document_conversion_method == "llamaparse":
+                            if file_ext == '.pdf' and config.llamaparse_max_pages > 0:
+                                status_msg = f"Extracting {config.llamaparse_max_pages} page(s) from {file_basename}"
+                                self.statusBar().showMessage(status_msg)
+                                progress_dialog.update_status(status_msg)
+                            else:
+                                status_msg = f"Converting {file_basename} with LlamaParse"
+                                self.statusBar().showMessage(status_msg)
+                                progress_dialog.update_status(status_msg)
+                            
+                            # Process the file with LlamaParse
+                            result = await llamaparse_client.process_pdf(filename)
+                        else:  # markitdown
+                            if file_ext == '.pdf' and config.markitdown_max_pages > 0:
+                                status_msg = f"Extracting {config.markitdown_max_pages} page(s) from {file_basename}"
+                                self.statusBar().showMessage(status_msg)
+                                progress_dialog.update_status(status_msg)
+                            else:
+                                status_msg = f"Converting {file_basename} with MarkItDown"
+                                self.statusBar().showMessage(status_msg)
+                                progress_dialog.update_status(status_msg)
+                            
+                            # Process the file with MarkItDown
+                            result = await markitdown_client.process_document(filename, config.markitdown_max_pages)
                         
                         # Create a new row in the table
                         row_position = self.table.rowCount()
@@ -1162,22 +1313,33 @@ class MainWindow(QMainWindow):
                 print("No folder selected, returning")
                 return
 
-            # Check if API key is set
-            if not config.llamaparse_api_key:
-                print("LlamaParse API key not configured")
-                QMessageBox.warning(self, "Warning", "Please configure LlamaParse API key first")
-                return
-
-            # Set API key from config
-            print(f"Setting API key: {config.llamaparse_api_key[:5]}...")
-            llamaparse_client.set_api_key(config.llamaparse_api_key)
+            # Check if using LlamaParse and API key is set
+            if config.document_conversion_method == "llamaparse":
+                if not config.llamaparse_api_key:
+                    print("LlamaParse API key not configured")
+                    QMessageBox.warning(self, "Warning", "Please configure LlamaParse API key first")
+                    return
+                # Set API key from config
+                print(f"Setting API key: {config.llamaparse_api_key[:5]}...")
+                llamaparse_client.set_api_key(config.llamaparse_api_key)
             
             # Show a "Scanning folder" message
             self.statusBar().showMessage("Scanning folder for supported files...")
             QApplication.processEvents()
             
             # Find all supported files in the folder and subfolders
-            supported_extensions = ['.pdf', '.docx', '.doc', '.pptx', '.ppt', '.jpg', '.jpeg', '.png']
+            supported_extensions = []
+            
+            # Set supported extensions based on the selected conversion method
+            if config.document_conversion_method == "llamaparse":
+                supported_extensions = ['.pdf', '.docx', '.doc', '.pptx', '.ppt', '.jpg', '.jpeg', '.png']
+            else:  # markitdown
+                supported_extensions = [
+                    '.pdf', '.docx', '.doc', '.pptx', '.ppt', '.xlsx', '.xls', 
+                    '.jpg', '.jpeg', '.png', '.html', '.htm', '.txt', '.csv', 
+                    '.json', '.xml', '.wav', '.mp3', '.zip'
+                ]
+            
             files_to_process = []
             
             print(f"Searching for files with extensions: {supported_extensions}")
@@ -1212,18 +1374,22 @@ class MainWindow(QMainWindow):
             print(f"Total files found: {len(files_to_process)}")
             if not files_to_process:
                 print("No supported files found")
-                QMessageBox.warning(self, "Warning", "No supported files found in the selected folder")
+                QMessageBox.warning(self, "Warning", f"No supported files found in the selected folder.\n\nSupported formats: {', '.join(supported_extensions)}")
                 return
                 
             # Confirm with user
             page_limit_msg = ""
-            if config.llamaparse_max_pages > 0:
+            if config.document_conversion_method == "llamaparse" and config.llamaparse_max_pages > 0:
                 page_limit_msg = f"\n\nNote: PDFs will be processed using only the first {config.llamaparse_max_pages} page(s) as configured in settings."
+            elif config.document_conversion_method == "markitdown" and config.markitdown_max_pages > 0:
+                page_limit_msg = f"\n\nNote: PDFs will be processed using only the first {config.markitdown_max_pages} page(s) as configured in settings."
+            
+            conversion_method = "LlamaParse" if config.document_conversion_method == "llamaparse" else "MarkItDown"
             
             reply = QMessageBox.question(
                 self,
                 "Confirm Processing",
-                f"Found {len(files_to_process)} files to process. Continue?{page_limit_msg}",
+                f"Found {len(files_to_process)} files to process using {conversion_method}. Continue?{page_limit_msg}",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
             )
             
@@ -1265,23 +1431,46 @@ class MainWindow(QMainWindow):
                     # Show progress in status bar
                     print(f"Processing file: {filename}")
                     file_ext = os.path.splitext(filename)[1].lower()
-                    if file_ext == '.pdf' and config.llamaparse_max_pages > 0:
-                        status_msg = f"Extracting {config.llamaparse_max_pages} page(s) from {file_basename}"
-                        self.statusBar().showMessage(status_msg)
-                        progress_dialog.update_status(status_msg)
-                    else:
-                        status_msg = f"Converting {file_basename}"
-                        self.statusBar().showMessage(status_msg)
-                        progress_dialog.update_status(status_msg)
                     
-                    # Process events to keep UI responsive
-                    QApplication.processEvents()
-                    
-                    # Process the file with lock to prevent event loop issues
-                    async with method_lock:
-                        print(f"Calling llamaparse_client.process_pdf for {filename}")
-                        result = await llamaparse_client.process_pdf(filename)
-                        print(f"Process complete, got result with content length: {len(result['content'])}")
+                    # Process based on selected conversion method
+                    if config.document_conversion_method == "llamaparse":
+                        # Show progress in status bar
+                        if file_ext == '.pdf' and config.llamaparse_max_pages > 0:
+                            status_msg = f"Extracting {config.llamaparse_max_pages} page(s) from {file_basename}"
+                            self.statusBar().showMessage(status_msg)
+                            progress_dialog.update_status(status_msg)
+                        else:
+                            status_msg = f"Converting {file_basename} with LlamaParse"
+                            self.statusBar().showMessage(status_msg)
+                            progress_dialog.update_status(status_msg)
+                        
+                        # Process events to keep UI responsive
+                        QApplication.processEvents()
+                        
+                        # Process the file with LlamaParse
+                        async with method_lock:
+                            print(f"Calling llamaparse_client.process_pdf for {filename}")
+                            result = await llamaparse_client.process_pdf(filename)
+                            print(f"Process complete, got result with content length: {len(result['content'])}")
+                    else:  # markitdown
+                        # Show progress in status bar
+                        if file_ext == '.pdf' and config.markitdown_max_pages > 0:
+                            status_msg = f"Extracting {config.markitdown_max_pages} page(s) from {file_basename}"
+                            self.statusBar().showMessage(status_msg)
+                            progress_dialog.update_status(status_msg)
+                        else:
+                            status_msg = f"Converting {file_basename} with MarkItDown"
+                            self.statusBar().showMessage(status_msg)
+                            progress_dialog.update_status(status_msg)
+                        
+                        # Process events to keep UI responsive
+                        QApplication.processEvents()
+                        
+                        # Process the file with MarkItDown
+                        async with method_lock:
+                            print(f"Calling markitdown_client.process_document for {filename}")
+                            result = await markitdown_client.process_document(filename, config.markitdown_max_pages)
+                            print(f"Process complete, got result with content length: {len(result['content'])}")
                     
                     # Create a new row in the table
                     row_position = self.table.rowCount()
@@ -1300,10 +1489,6 @@ class MainWindow(QMainWindow):
                     
                     processed_count += 1
                     print(f"Successfully processed file {processed_count}/{len(files_to_process)}")
-                    
-                    # Update progress
-                    progress_dialog.update_progress(processed_count, len(files_to_process))
-                    self.statusBar().showMessage(f"Converted {file_basename} ({processed_count}/{len(files_to_process)})")
                     
                 except asyncio.InvalidStateError as e:
                     error_count += 1
@@ -1507,4 +1692,104 @@ class MainWindow(QMainWindow):
                 print(f"Error creating database: {str(e)}")
                 import traceback
                 traceback.print_exc()
-                QMessageBox.critical(self, "Error", f"Failed to create database: {str(e)}") 
+                QMessageBox.critical(self, "Error", f"Failed to create database: {str(e)}")
+
+    def clear_all_data(self):
+        """Clear all data from the database and table"""
+        if self.processing_thread and self.processing_thread.isRunning():
+            QMessageBox.warning(self, "Warning", "Please wait for processing to complete before clearing all data")
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Confirm Clear All Data",
+            "Are you sure you want to clear ALL data from the database? This will delete all documents, responses, and cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                # Clear the table widget
+                self.table.setRowCount(0)
+                
+                # Create a new event loop for this operation
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+                try:
+                    # Clear all data in the database
+                    loop.run_until_complete(self.clear_all_data_in_db())
+                    
+                    # Clean up any pending tasks
+                    pending_tasks = asyncio.all_tasks(loop)
+                    if pending_tasks:
+                        print(f"Cancelling {len(pending_tasks)} pending tasks")
+                        for task in pending_tasks:
+                            task.cancel()
+                        # Allow tasks to respond to cancellation
+                        loop.run_until_complete(asyncio.gather(*pending_tasks, return_exceptions=True))
+                except Exception as e:
+                    print(f"Error in database clearing operation: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                    raise
+                finally:
+                    # Always close the loop
+                    if loop:
+                        try:
+                            # Cancel all remaining tasks
+                            for task in asyncio.all_tasks(loop):
+                                task.cancel()
+                            
+                            # Run until all tasks are cancelled
+                            if not loop.is_closed():
+                                loop.run_until_complete(asyncio.sleep(0.1))
+                                
+                            # Stop and close the loop
+                            if loop.is_running():
+                                loop.stop()
+                            if not loop.is_closed():
+                                loop.close()
+                                
+                            print("Event loop closed successfully")
+                        except Exception as e:
+                            print(f"Error closing event loop: {str(e)}")
+                
+                self.status_label.setText("Database cleared")
+                QMessageBox.information(self, "Success", "All data has been cleared from the database")
+            except Exception as e:
+                print(f"Failed to clear database: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                QMessageBox.critical(self, "Error", f"Failed to clear database: {str(e)}")
+
+    async def clear_all_data_in_db(self):
+        """Delete all records from the database tables"""
+        conn = None
+        try:
+            # Get a database connection
+            conn = await self.db_manager.get_connection()
+            
+            # Delete all records from processing_jobs table
+            await conn.execute("DELETE FROM processing_jobs")
+            
+            # Reset the auto-increment counter
+            await conn.execute("DELETE FROM sqlite_sequence WHERE name='processing_jobs'")
+            
+            # Commit the changes
+            await conn.commit()
+            
+            # Vacuum the database to reclaim space
+            await conn.execute("VACUUM")
+            await conn.commit()
+            
+            print("Successfully cleared all data from the database")
+        except Exception as e:
+            print(f"Error clearing database: {str(e)}")
+            if conn:
+                await conn.rollback()  # Rollback any uncommitted changes
+            raise
+        finally:
+            # Always release the connection
+            if conn:
+                await self.db_manager.release_connection(conn) 
