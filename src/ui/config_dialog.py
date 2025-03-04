@@ -1,8 +1,10 @@
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
     QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox,
-    QPushButton, QTextEdit, QFrame, QMessageBox, QCheckBox
+    QPushButton, QTextEdit, QFrame, QMessageBox, QCheckBox,
+    QTabWidget, QWidget, QRadioButton, QButtonGroup, QSizePolicy
 )
+from PyQt6.QtCore import Qt
 from ..config import config
 from .styles import DARK_THEME
 
@@ -20,6 +22,44 @@ class ConfigDialog(QDialog):
     def setup_ui(self):
         layout = QVBoxLayout(self)
 
+        # Create tab widget
+        self.tab_widget = QTabWidget()
+        
+        # Create tabs
+        self.general_tab = QWidget()
+        self.document_conversion_tab = QWidget()
+        self.token_efficiency_tab = QWidget()
+        
+        # Add tabs to widget
+        self.tab_widget.addTab(self.general_tab, "General")
+        self.tab_widget.addTab(self.document_conversion_tab, "Document Conversion")
+        self.tab_widget.addTab(self.token_efficiency_tab, "Token Efficiency")
+        
+        # Setup each tab
+        self.setup_general_tab()
+        self.setup_document_conversion_tab()
+        self.setup_token_efficiency_tab()
+        
+        layout.addWidget(self.tab_widget)
+
+        # Buttons
+        buttons_layout = QHBoxLayout()
+        save_button = QPushButton("Save")
+        cancel_button = QPushButton("Cancel")
+        buttons_layout.addWidget(save_button)
+        buttons_layout.addWidget(cancel_button)
+        layout.addLayout(buttons_layout)
+
+        # Connect signals
+        save_button.clicked.connect(self.save_config)
+        cancel_button.clicked.connect(self.reject)
+        self.model_combo.currentTextChanged.connect(self.on_model_changed)
+        self.llamaparse_mode.currentTextChanged.connect(self.update_llamaparse_info)
+        self.conversion_method_group.buttonClicked.connect(self.on_conversion_method_changed)
+
+    def setup_general_tab(self):
+        layout = QVBoxLayout(self.general_tab)
+        
         # API Keys
         layout.addWidget(QLabel("OpenAI API Key:"))
         self.openai_key = QLineEdit()
@@ -52,7 +92,10 @@ class ConfigDialog(QDialog):
         layout.addWidget(QLabel("System Prompt:"))
         self.system_prompt = QTextEdit()
         self.system_prompt.setPlainText(config.system_prompt)
-        self.system_prompt.setMaximumHeight(100)
+        # Set initial height but allow manual resizing
+        self.system_prompt.setMinimumHeight(100)
+        # Enable manual resizing
+        self.system_prompt.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         layout.addWidget(self.system_prompt)
 
         # Parameters
@@ -89,16 +132,64 @@ class ConfigDialog(QDialog):
 
         layout.addLayout(params_layout)
 
+        # Model-specific info
+        self.model_info = QLabel()
+        self.update_model_info()
+        layout.addWidget(self.model_info)
+
+    def setup_document_conversion_tab(self):
+        layout = QVBoxLayout(self.document_conversion_tab)
+        
+        # Document Conversion Method
+        layout.addWidget(QLabel("Document Conversion Method:"))
+        
+        # Create radio buttons for conversion method
+        method_layout = QHBoxLayout()
+        self.conversion_method_group = QButtonGroup(self)
+        
+        self.llamaparse_radio = QRadioButton("LlamaParse (Premium)")
+        self.markitdown_radio = QRadioButton("MarkItDown (Local)")
+        
+        self.conversion_method_group.addButton(self.llamaparse_radio)
+        self.conversion_method_group.addButton(self.markitdown_radio)
+        
+        # Set the current selection based on config
+        if config.document_conversion_method == "llamaparse":
+            self.llamaparse_radio.setChecked(True)
+        else:
+            self.markitdown_radio.setChecked(True)
+        
+        method_layout.addWidget(self.llamaparse_radio)
+        method_layout.addWidget(self.markitdown_radio)
+        layout.addLayout(method_layout)
+        
+        # Create a stacked widget for the different conversion methods
+        self.llamaparse_widget = QWidget()
+        self.markitdown_widget = QWidget()
+        
+        # Setup LlamaParse settings
+        self.setup_llamaparse_settings()
+        
+        # Setup MarkItDown settings
+        self.setup_markitdown_settings()
+        
+        # Add the widgets to the layout
+        layout.addWidget(self.llamaparse_widget)
+        layout.addWidget(self.markitdown_widget)
+        
+        # Show/hide based on current selection
+        self.on_conversion_method_changed()
+
+    def setup_llamaparse_settings(self):
+        llamaparse_layout = QVBoxLayout(self.llamaparse_widget)
+        
         # Add a separator
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
         line.setFrameShadow(QFrame.Shadow.Sunken)
-        layout.addWidget(line)
-
-        # LlamaParse Settings
-        layout.addWidget(QLabel("LlamaParse Settings"))
+        llamaparse_layout.addWidget(line)
         
-        llamaparse_layout = QVBoxLayout()
+        llamaparse_layout.addWidget(QLabel("LlamaParse Settings"))
         
         # Mode selection
         mode_layout = QHBoxLayout()
@@ -163,32 +254,51 @@ class ConfigDialog(QDialog):
         advanced_layout.addWidget(self.llamaparse_preserve_layout)
 
         llamaparse_layout.addLayout(advanced_layout)
-        layout.addLayout(llamaparse_layout)
 
+    def setup_markitdown_settings(self):
+        markitdown_layout = QVBoxLayout(self.markitdown_widget)
+        
         # Add a separator
-        line2 = QFrame()
-        line2.setFrameShape(QFrame.Shape.HLine)
-        line2.setFrameShadow(QFrame.Shadow.Sunken)
-        layout.addWidget(line2)
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Sunken)
+        markitdown_layout.addWidget(line)
+        
+        markitdown_layout.addWidget(QLabel("MarkItDown Settings"))
+        
+        # Max pages
+        pages_layout = QHBoxLayout()
+        pages_layout.addWidget(QLabel("Max Pages (0 = no limit):"))
+        self.markitdown_max_pages = QSpinBox()
+        self.markitdown_max_pages.setRange(0, 1000)
+        self.markitdown_max_pages.setValue(config.markitdown_max_pages)
+        pages_layout.addWidget(self.markitdown_max_pages)
+        markitdown_layout.addLayout(pages_layout)
+        
+        # Information about MarkItDown
+        markitdown_info = QLabel(
+            "MarkItDown is a local document conversion tool that supports:\n"
+            "• PDF\n"
+            "• PowerPoint\n"
+            "• Word\n"
+            "• Excel\n"
+            "• Images (EXIF metadata and OCR)\n"
+            "• Audio (EXIF metadata and speech transcription)\n"
+            "• HTML\n"
+            "• Text-based formats (CSV, JSON, XML)\n"
+            "• ZIP files\n\n"
+            "Using MarkItDown processes files locally on your machine without sending data to external services."
+        )
+        markitdown_layout.addWidget(markitdown_info)
 
-        # Model-specific info
-        self.model_info = QLabel()
-        self.update_model_info()
-        layout.addWidget(self.model_info)
-
-        # Buttons
-        buttons_layout = QHBoxLayout()
-        save_button = QPushButton("Save")
-        cancel_button = QPushButton("Cancel")
-        buttons_layout.addWidget(save_button)
-        buttons_layout.addWidget(cancel_button)
-        layout.addLayout(buttons_layout)
-
-        # Connect signals
-        save_button.clicked.connect(self.save_config)
-        cancel_button.clicked.connect(self.reject)
-        self.model_combo.currentTextChanged.connect(self.on_model_changed)
-        self.llamaparse_mode.currentTextChanged.connect(self.update_llamaparse_info)
+    def on_conversion_method_changed(self):
+        # Show/hide the appropriate settings based on the selected conversion method
+        if self.llamaparse_radio.isChecked():
+            self.llamaparse_widget.setVisible(True)
+            self.markitdown_widget.setVisible(False)
+        else:
+            self.llamaparse_widget.setVisible(False)
+            self.markitdown_widget.setVisible(True)
 
     def on_model_changed(self, model_name: str):
         """Update max tokens and model info when model selection changes"""
@@ -205,10 +315,18 @@ class ConfigDialog(QDialog):
         
         if model.startswith("o"):
             self.reasoning_effort.setEnabled(True)
+            
+            # Get pricing information based on model
+            if model == "o1":
+                pricing_info = "• Pricing: $15.00/MTok input, $60.00/MTok output"
+            else:  # o3-mini
+                pricing_info = "• Pricing: $1.10/MTok input, $4.40/MTok output"
+                
             self.model_info.setText(
                 f"OpenAI Reasoning Model\n"
-                f"• Max tokens: {max_tokens}\n"
-                f"• Recommended completion tokens: {recommended_tokens}\n"
+                f"• Max tokens: {max_tokens:,} (extremely high capacity)\n"
+                f"• Recommended completion tokens: {recommended_tokens:,}\n"
+                f"{pricing_info}\n"
                 f"• Uses reasoning tokens for complex problem solving\n"
                 f"• Adjust reasoning effort to balance speed vs. thoroughness"
             )
@@ -216,9 +334,10 @@ class ConfigDialog(QDialog):
             self.reasoning_effort.setEnabled(False)
             self.model_info.setText(
                 f"Anthropic Claude Model\n"
-                f"• Max tokens: {max_tokens}\n"
-                f"• Recommended completion tokens: {recommended_tokens}\n"
-                f"• Standard completion model\n"
+                f"• Max tokens: {max_tokens:,} (higher capacity than most models)\n"
+                f"• Recommended completion tokens: {recommended_tokens:,}\n"
+                f"• Pricing: $3.00/MTok input, $15.00/MTok output\n"
+                f"• Standard completion model with excellent long-form responses\n"
                 f"• Rate limits: 4,000 RPM, 200K input TPM, 80K output TPM"
             )
 
@@ -250,6 +369,110 @@ class ConfigDialog(QDialog):
                 "• Highest accuracy for complex layouts"
             )
 
+    def setup_token_efficiency_tab(self):
+        """Setup the token efficiency tab with text truncation options"""
+        layout = QVBoxLayout(self.token_efficiency_tab)
+        
+        # Add title and description
+        title_label = QLabel("Token Efficiency Settings")
+        title_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        layout.addWidget(title_label)
+        
+        description_label = QLabel(
+            "These settings help reduce token usage when processing large documents. "
+            "You can choose to send only a portion of the document to the AI model, "
+            "which can significantly reduce costs for simple extraction tasks."
+        )
+        description_label.setWordWrap(True)
+        layout.addWidget(description_label)
+        
+        layout.addSpacing(10)
+        
+        # Truncation mode
+        layout.addWidget(QLabel("Text Truncation Mode:"))
+        self.truncation_mode = QComboBox()
+        self.truncation_mode.addItems(["None", "First N Characters", "First N Paragraphs"])
+        
+        # Set current mode based on config
+        current_mode_index = 0
+        if config.truncation_mode == "characters":
+            current_mode_index = 1
+        elif config.truncation_mode == "paragraphs":
+            current_mode_index = 2
+        self.truncation_mode.setCurrentIndex(current_mode_index)
+        
+        layout.addWidget(self.truncation_mode)
+        
+        # Character limit
+        char_limit_layout = QHBoxLayout()
+        char_limit_layout.addWidget(QLabel("Character Limit:"))
+        self.truncation_character_limit = QSpinBox()
+        self.truncation_character_limit.setRange(100, 100000)
+        self.truncation_character_limit.setSingleStep(1000)
+        self.truncation_character_limit.setValue(config.truncation_character_limit)
+        char_limit_layout.addWidget(self.truncation_character_limit)
+        layout.addLayout(char_limit_layout)
+        
+        # Paragraph limit
+        para_limit_layout = QHBoxLayout()
+        para_limit_layout.addWidget(QLabel("Paragraph Limit:"))
+        self.truncation_paragraph_limit = QSpinBox()
+        self.truncation_paragraph_limit.setRange(1, 100)
+        self.truncation_paragraph_limit.setValue(config.truncation_paragraph_limit)
+        para_limit_layout.addWidget(self.truncation_paragraph_limit)
+        layout.addLayout(para_limit_layout)
+        
+        # Include metadata option
+        self.truncation_include_metadata = QCheckBox("Include document metadata with truncated text")
+        self.truncation_include_metadata.setChecked(config.truncation_include_metadata)
+        layout.addWidget(self.truncation_include_metadata)
+        
+        # Force full document option
+        layout.addSpacing(10)
+        self.force_full_document = QCheckBox("Force sending full document (may exceed token limits and cause errors)")
+        self.force_full_document.setChecked(config.force_full_document)
+        self.force_full_document.setStyleSheet("color: #FF6347;")  # Tomato red to indicate potential risk
+        layout.addWidget(self.force_full_document)
+        
+        # Token usage information
+        token_info_frame = QFrame()
+        token_info_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        token_info_frame.setFrameShadow(QFrame.Shadow.Sunken)
+        token_info_layout = QVBoxLayout(token_info_frame)
+        
+        token_info_title = QLabel("Token Usage Information")
+        token_info_title.setStyleSheet("font-weight: bold;")
+        token_info_layout.addWidget(token_info_title)
+        
+        token_info_text = QLabel(
+            "• OpenAI models charge per token (roughly 4 characters)\n"
+            "• Large documents can use thousands of tokens\n"
+            "• For simple extraction tasks, you often only need the first part of a document\n"
+            "• Using truncation can reduce costs by 90% or more for large documents"
+        )
+        token_info_layout.addWidget(token_info_text)
+        
+        layout.addWidget(token_info_frame)
+        
+        # Connect signals
+        self.truncation_mode.currentIndexChanged.connect(self.update_truncation_controls)
+        
+        # Initial update of controls
+        self.update_truncation_controls()
+        
+        # Add stretch to push everything to the top
+        layout.addStretch()
+    
+    def update_truncation_controls(self):
+        """Enable/disable controls based on truncation mode"""
+        mode_index = self.truncation_mode.currentIndex()
+        
+        # Enable/disable character limit
+        self.truncation_character_limit.setEnabled(mode_index == 1)
+        
+        # Enable/disable paragraph limit
+        self.truncation_paragraph_limit.setEnabled(mode_index == 2)
+
     def save_config(self):
         # Update config
         config.openai_api_key = self.openai_key.text()
@@ -261,6 +484,23 @@ class ConfigDialog(QDialog):
         config.batch_size = self.batch_size.value()
         config.reasoning_effort = self.reasoning_effort.currentText()
 
+        # Token efficiency settings
+        truncation_mode_index = self.truncation_mode.currentIndex()
+        if truncation_mode_index == 0:
+            config.truncation_mode = "none"
+        elif truncation_mode_index == 1:
+            config.truncation_mode = "characters"
+        elif truncation_mode_index == 2:
+            config.truncation_mode = "paragraphs"
+        
+        config.truncation_character_limit = self.truncation_character_limit.value()
+        config.truncation_paragraph_limit = self.truncation_paragraph_limit.value()
+        config.truncation_include_metadata = self.truncation_include_metadata.isChecked()
+        config.force_full_document = self.force_full_document.isChecked()
+
+        # Document conversion method
+        config.document_conversion_method = "llamaparse" if self.llamaparse_radio.isChecked() else "markitdown"
+        
         # LlamaParse settings
         config.llamaparse_mode = self.llamaparse_mode.currentText()
         config.llamaparse_continuous_mode = self.llamaparse_continuous.isChecked()
@@ -272,10 +512,18 @@ class ConfigDialog(QDialog):
         config.llamaparse_do_not_unroll_columns = self.llamaparse_no_unroll.isChecked()
         config.llamaparse_output_tables_as_html = self.llamaparse_html_tables.isChecked()
         config.llamaparse_preserve_layout_alignment = self.llamaparse_preserve_layout.isChecked()
+        
+        # MarkItDown settings
+        config.markitdown_max_pages = self.markitdown_max_pages.value()
 
         # Save to file
         try:
             config.save_config()
+            
+            # Update truncation indicator in main window
+            if self.parent():
+                self.parent().update_truncation_indicator()
+                
             QMessageBox.information(self, "Success", "Settings saved successfully!")
             self.accept()
         except Exception as e:

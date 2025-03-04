@@ -31,8 +31,19 @@ def check_pymupdf():
         print("Please install it with: pip install pymupdf>=1.22.0")
         return False
 
-async def process_file(file_path, output_dir=None, retry_count=0, max_retries=3):
-    """Process a single file using MarkItDown with enhanced table extraction."""
+async def process_file(file_path, output_dir=None, retry_count=0, max_retries=3, force_regenerate=False):
+    """Process a single file using MarkItDown with enhanced table extraction.
+    
+    Args:
+        file_path: Path to the file to process
+        output_dir: Directory to save the output file (if None, save alongside source file)
+        retry_count: Current retry attempt
+        max_retries: Maximum number of retry attempts
+        force_regenerate: Force regeneration of markdown file even if it exists
+        
+    Returns:
+        True if processing was successful, False otherwise
+    """
     try:
         # Import the MarkItDown client
         from src.api.markitdown_client import markitdown_client
@@ -42,23 +53,37 @@ async def process_file(file_path, output_dir=None, retry_count=0, max_retries=3)
         # Initialize MarkItDown
         markitdown_client.initialize()
         
+        # Check if markdown file already exists and is current
+        if not force_regenerate and markitdown_client.is_markdown_current(file_path):
+            markdown_path = markitdown_client.get_markdown_path(file_path)
+            print(f"✅ Using existing markdown file: {markdown_path}")
+            
+            # If output_dir is specified and different from the source directory, copy the file
+            if output_dir and os.path.dirname(markdown_path) != os.path.abspath(output_dir):
+                import shutil
+                os.makedirs(output_dir, exist_ok=True)
+                output_file = os.path.join(output_dir, os.path.basename(markdown_path))
+                shutil.copy2(markdown_path, output_file)
+                print(f"   Copied to: {output_file}")
+            
+            return True
+        
         # Process the document
-        result = await markitdown_client.process_document(file_path)
+        result = await markitdown_client.process_document(file_path, force_regenerate=force_regenerate)
         
-        # Create output filename
-        base_name = os.path.splitext(os.path.basename(file_path))[0]
-        if output_dir:
+        # Get the markdown path from the result
+        markdown_path = result["metadata"].get("markdown_path")
+        
+        # If output_dir is specified and different from the source directory, copy the file
+        if output_dir and os.path.dirname(markdown_path) != os.path.abspath(output_dir):
+            import shutil
             os.makedirs(output_dir, exist_ok=True)
-            output_file = os.path.join(output_dir, f"{base_name}.md")
-        else:
-            output_file = f"{base_name}.md"
-        
-        # Save the result
-        with open(output_file, "w", encoding="utf-8") as f:
-            f.write(result["content"])
+            output_file = os.path.join(output_dir, os.path.basename(markdown_path))
+            shutil.copy2(markdown_path, output_file)
+            print(f"   Copied to: {output_file}")
         
         print(f"✅ Successfully processed: {file_path}")
-        print(f"   Output saved to: {output_file}")
+        print(f"   Output saved to: {markdown_path}")
         print(f"   Content length: {len(result['content'])} characters")
         
         # Force garbage collection to free memory
@@ -74,13 +99,25 @@ async def process_file(file_path, output_dir=None, retry_count=0, max_retries=3)
             print(f"Retrying ({retry_count + 1}/{max_retries})...")
             # Wait a bit before retrying
             await asyncio.sleep(2)
-            return await process_file(file_path, output_dir, retry_count + 1, max_retries)
+            return await process_file(file_path, output_dir, retry_count + 1, max_retries, force_regenerate)
         
         return False
 
 async def batch_process(input_dir, output_dir=None, file_extensions=None, recursive=False, resume_file=None, 
-                        max_retries=3, delay=1.0, gc_interval=5):
-    """Process all files in a directory."""
+                        max_retries=3, delay=1.0, gc_interval=5, force_regenerate=False):
+    """Process all files in a directory.
+    
+    Args:
+        input_dir: Directory containing files to process
+        output_dir: Directory to save output files (if None, save alongside source files)
+        file_extensions: List of file extensions to process
+        recursive: Whether to process subdirectories recursively
+        resume_file: File to track progress for resuming
+        max_retries: Maximum number of retry attempts for failed files
+        delay: Delay in seconds between processing files
+        gc_interval: Run garbage collection after processing this many files
+        force_regenerate: Force regeneration of markdown files even if they exist
+    """
     if file_extensions is None:
         file_extensions = ['.pdf', '.docx', '.doc', '.pptx', '.ppt', '.xlsx', '.xls']
     
@@ -121,6 +158,7 @@ async def batch_process(input_dir, output_dir=None, file_extensions=None, recurs
     successful = 0
     failed = 0
     skipped = 0
+    cached = 0
     
     for i, file_path in enumerate(files_to_process):
         # Skip already processed files if resuming
@@ -131,7 +169,24 @@ async def batch_process(input_dir, output_dir=None, file_extensions=None, recurs
         
         print(f"Processing file {i+1}/{len(files_to_process)}: {file_path}")
         
-        if await process_file(file_path, output_dir, max_retries=max_retries):
+        # Check if markdown file already exists and is current (only if not forcing regeneration)
+        from src.api.markitdown_client import markitdown_client
+        if not force_regenerate and markitdown_client.is_markdown_current(file_path):
+            print(f"Using cached markdown file for: {file_path}")
+            cached += 1
+            # Add to processed files and save progress
+            processed_files.add(file_path)
+            try:
+                with open(progress_file, 'w') as f:
+                    json.dump({
+                        'processed_files': list(processed_files),
+                        'last_update': datetime.now().isoformat()
+                    }, f)
+            except Exception as e:
+                print(f"Warning: Could not save progress: {str(e)}")
+            continue
+        
+        if await process_file(file_path, output_dir, max_retries=max_retries, force_regenerate=force_regenerate):
             successful += 1
             # Add to processed files and save progress
             processed_files.add(file_path)
@@ -156,6 +211,7 @@ async def batch_process(input_dir, output_dir=None, file_extensions=None, recurs
     
     print("\nBatch processing complete!")
     print(f"Successfully processed: {successful} files")
+    print(f"Used cached markdown: {cached} files")
     print(f"Failed to process: {failed} files")
     print(f"Skipped (already processed): {skipped} files")
 
@@ -176,6 +232,7 @@ def main():
     parser.add_argument("--max-retries", type=int, default=3, help="Maximum number of retry attempts for failed files")
     parser.add_argument("--delay", type=float, default=1.0, help="Delay in seconds between processing files")
     parser.add_argument("--gc-interval", type=int, default=5, help="Run garbage collection after processing this many files")
+    parser.add_argument("--force-regenerate", action="store_true", help="Force regeneration of markdown files even if they exist")
     
     args = parser.parse_args()
     
@@ -207,6 +264,7 @@ def main():
     print(f"Max retries: {args.max_retries}")
     print(f"Delay between files: {args.delay} seconds")
     print(f"Garbage collection interval: Every {args.gc_interval} files")
+    print(f"Force regenerate: {'Enabled' if args.force_regenerate else 'Disabled'}")
     print("-" * 50)
     
     # Run the batch processing
@@ -218,7 +276,8 @@ def main():
         resume_file,
         args.max_retries,
         args.delay,
-        args.gc_interval
+        args.gc_interval,
+        args.force_regenerate
     ))
     
     # Print end time and duration

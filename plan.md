@@ -227,6 +227,56 @@ print(message.content)
   - [x] Progress tracking and reporting
   - [x] Create robust batch processing launcher
 
+## Token-Efficient Processing
+- [x] Add options to limit text sent to GPT models
+  - [x] Create text truncation settings in configuration dialog
+  - [x] Add first N characters/tokens option
+  - [x] Add first N paragraphs option
+  - [x] Add custom regex pattern matching for targeted extraction
+- [ ] Implement smart extraction modes
+  - [ ] Document date extraction mode
+  - [ ] Entity extraction mode (names, addresses, etc.)
+  - [ ] Key information extraction mode
+- [x] Add text selection processing
+  - [x] Allow manual selection of text portions for processing
+  - [x] Add right-click context menu for processing selected text
+  - [x] Implement highlighting for selected text
+- [ ] Create document summarization option
+  - [ ] Add pre-processing step to generate document summary
+  - [ ] Allow processing of summary instead of full document
+  - [ ] Implement caching of summaries for repeated processing
+- [x] Add token usage estimation and cost preview
+  - [x] Show estimated token count before processing
+  - [x] Display approximate cost based on current API pricing
+  - [x] Add cost calculation column to the results table
+  - [x] Update configuration dialog to show pricing information
+- [x] Fix cost display issues
+  - [x] Ensure cost is properly calculated and stored in database
+  - [x] Implement direct cost update in UI after processing
+  - [x] Add threaded cost update mechanism to avoid UI freezing
+  - [x] Add debug logging for cost calculation and display
+  - [x] Ensure cost is displayed correctly after table refresh
+
+## MarkItDown Optimization
+- [x] Optimize document ingestion with MarkItDown
+  - [x] Save markdown files alongside source files
+  - [x] Import markdown files directly into database
+  - [x] Add caching mechanism to avoid reprocessing
+  - [x] Implement file change detection
+- [x] Enhance batch processing for markdown files
+  - [x] Update batch processor to use cached markdown files
+  - [x] Add option to regenerate markdown files
+  - [x] Improve progress tracking for two-stage processing
+- [x] Update UI for optimized workflow
+  - [x] Add indicators for cached markdown files
+  - [x] Provide options to manage cached files
+  - [x] Maintain backward compatibility
+- [x] Add direct markdown import functionality
+  - [x] Add "Import Markdown" button to UI
+  - [x] Support single file and folder import
+  - [x] Match filenames to update existing entries
+  - [x] Handle large documents exceeding Excel limits
+
 ## Installation and Packaging
 - [x] Create comprehensive installation script
   - [x] Check for Python and pip

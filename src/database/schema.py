@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS processing_jobs (
     model_name TEXT NOT NULL,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     token_count INTEGER DEFAULT 0,
+    cost REAL DEFAULT 0,
     status TEXT DEFAULT 'pending',
     error TEXT,
     batch_id INTEGER,

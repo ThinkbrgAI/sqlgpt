@@ -1,0 +1,12 @@
+PyQt6>=6.4.0
+aiosqlite>=0.19.0
+pandas>=2.0.0
+aiohttp>=3.8.0
+openai>=1.0.0
+anthropic>=0.7.0
+python-dotenv>=1.0.0
+tiktoken>=0.5.0
+openpyxl>=3.1.0  # For Excel support
+PyPDF2>=3.0.0  # For PDF page extraction 
+markitdown==0.0.1a4  # For local document conversion 
+pymupdf>=1.22.0  # For enhanced table extraction from PDFs 

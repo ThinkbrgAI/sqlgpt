@@ -1,101 +1,116 @@
-# GPT Batch Processor
+# SQLGpt - PDF Processing with Enhanced Table Extraction
 
-A high-performance system for processing large datasets through GPT models (OpenAI and Anthropic) with SQLite storage and a PyQt6-based GUI interface.
+A powerful application for processing PDF files and other documents, with enhanced table extraction capabilities.
 
 ## Features
 
-- Process large batches of documents through OpenAI and Anthropic APIs
-- Import from Excel files or folders (supports .txt and .md files)
-- Intelligent rate limiting and token management
-- Persistent configuration storage
-- Progress tracking and error handling
-- Export results to Excel
-
-## Requirements
-
-- Python 3.8 or higher
-- Windows 10/11 (64-bit)
-- 8GB RAM minimum (16GB recommended)
-- Internet connection for API access
+- **Document Conversion**: Convert various file formats to Markdown
+- **Enhanced Table Extraction**: Automatically detect and extract tables from PDFs
+- **Batch Processing**: Process multiple files or entire folders at once
+- **Metadata Extraction**: Extract and display metadata from documents
+- **Export to Excel**: Export processed data to Excel for further analysis
 
 ## Installation
 
-1. Clone this repository:
-   ```bash
-   git clone [repository-url]
-   cd sqlgpt
+### Prerequisites
+
+- **Python 3.10 or higher** - [Download Python](https://www.python.org/downloads/)
+  - Make sure to check "Add Python to PATH" during installation
+
+### Quick Installation (Recommended)
+
+1. Run the `install_all.bat` script by double-clicking it
+2. Wait for the installation to complete
+3. Follow the on-screen instructions
+
+### Manual Installation
+
+If the quick installation doesn't work, you can install the components manually:
+
+1. Install base requirements:
+   ```
+   pip install -r requirements.txt
    ```
 
+2. Install MarkItDown:
+   ```
+   pip install markitdown>=0.0.2
+   ```
+
+3. Install PyMuPDF for enhanced table extraction:
+   ```
+   pip install pymupdf>=1.22.0
+   ```
+
+## Running the Application
+
+1. Open a command prompt or PowerShell window in the application folder
 2. Run the application:
-   ```bash
-   run.bat
+   ```
+   python run.py
    ```
 
-The script will automatically:
-- Create a virtual environment
-- Install required dependencies
-- Start the application
+## Using the Application
 
-## Configuration
+### Converting Files to Markdown
 
-1. Click the "Configure" button in the application
-2. Enter your API keys:
-   - OpenAI API key for GPT-4 models
-   - Anthropic API key for Claude models
-3. Select your preferred model
-4. Adjust settings:
-   - System prompt
-   - Batch size
-   - Token limits
-   - Reasoning effort (for OpenAI models)
+1. Click the "Convert Files to MD" button
+2. Select one or more files to convert
+3. The application will process the files and display the results in the table
 
-## Usage
+### Converting a Folder to Markdown
 
-1. Import Data:
-   - Click "Import Excel" to load data from an Excel file
-   - Click "Import Folder" to load .txt and .md files from a folder
-   
-2. Process Documents:
-   - Review imported documents in the table
-   - Click "Process Batch" to start processing
-   - Monitor progress in the status bar
-   
-3. Export Results:
-   - Click "Export Excel" to save results
-   - Results include filename, source document, and API response
+1. Click the "Convert Folder to MD" button
+2. Select a folder containing files to convert
+3. The application will find all supported files in the folder and its subfolders
+4. Confirm the processing when prompted
+5. The application will process all files and display the results in the table
 
-## Development
+### Enhanced Table Extraction
 
-To run tests:
-```bash
-run_tests.bat
-```
+The application automatically uses PyMuPDF for enhanced table extraction when processing PDF files. This provides better table formatting in the resulting Markdown.
 
-## Rate Limits
+### Exporting Results
 
-### OpenAI Models
-- GPT-4 Turbo: 500 RPM, 150K TPM
-- GPT-4: 500 RPM, 150K TPM
-- GPT-3.5 Turbo: 3500 RPM, 180K TPM
+1. After processing files, click the "Export Excel" button
+2. Choose a location to save the Excel file
+3. The application will export all data from the table to the Excel file
 
-### Anthropic Models
-- Claude-3: 4000 RPM, 200K input TPM, 80K output TPM
+## Supported File Formats
 
-## Error Handling
+- **PDF** - With enhanced table extraction
+- **Word** - DOCX, DOC
+- **PowerPoint** - PPTX, PPT
+- **Excel** - XLSX, XLS
+- **Images** - JPG, JPEG, PNG
+- **Web** - HTML, HTM
+- **Text** - TXT, CSV, JSON, XML
+- **Audio** - WAV, MP3
+- **Archives** - ZIP
 
-- API errors are logged and displayed
-- Failed requests are marked in the database
-- Processing can be stopped and resumed
-- Rate limits are automatically respected
+## Troubleshooting
 
-## Performance
+### Installation Issues
 
-The system is optimized for:
-- Parallel API requests
-- Efficient token usage
-- Memory management
-- Database performance
+- Make sure Python 3.10 or higher is installed and in your PATH
+- Try running the commands manually in a command prompt
+- Check your internet connection
 
-## Support
+### Application Issues
 
-For issues or questions, please open a GitHub issue. 
+- If the application crashes, check the console output for error messages
+- Make sure all dependencies are installed correctly
+- Try restarting the application
+
+## Additional Documentation
+
+- [ENHANCED_TABLE_EXTRACTION.md](ENHANCED_TABLE_EXTRACTION.md) - Details about the enhanced table extraction feature
+- [MARKITDOWN_README.md](MARKITDOWN_README.md) - Information about the MarkItDown library
+- [MARKITDOWN_USER_GUIDE.md](MARKITDOWN_USER_GUIDE.md) - Detailed guide for using MarkItDown
+
+## Credits
+
+- **MarkItDown** - For local document conversion
+- **PyMuPDF** - For enhanced table extraction
+- **PyQt6** - For the user interface
+- **pandas** - For data handling and Excel export 
